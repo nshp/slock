@@ -108,7 +108,7 @@ static double battery(void) {
 	return now/full*100.0;
 }
 
-static Pixmap doodle(Display *dpy, int w, int h) {
+static Pixmap doodle(Display *dpy, int w, int h, Bool capslock) {
 	Pixmap pm = XCreatePixmap(dpy, DefaultRootWindow(dpy), w, h,
 					DefaultDepth(dpy, DefaultScreen(dpy)));
 	cairo_surface_t *surface = cairo_xlib_surface_create(
@@ -120,8 +120,10 @@ static Pixmap doodle(Display *dpy, int w, int h) {
 
 	double mem_percent = memory();
 	double bat_percent = battery();
+	double x, y, clockheight;
 	time_t epoch = time(NULL);
 	char dt[10];
+	const char cl[] = "capslock";
 	strftime(dt, 10, "%H:%M", localtime(&epoch));
 
 	cairo_set_source_rgba(cr, 0.13, 0.13, 0.13, 1.0);
@@ -152,18 +154,34 @@ static Pixmap doodle(Display *dpy, int w, int h) {
 	cairo_arc(cr, w/2.0, h/2.0, 188, rad(90), rad(90 + bat_percent*360/100));
 	cairo_stroke(cr);
 
+	/* Clock */
 	cairo_set_source_rgba(cr, 0.82, 0.08, 0.45, 1.0);
 	cairo_select_font_face(cr, FONT, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
 	cairo_set_font_size(cr, 70.0);
 	cairo_text_extents (cr, dt, &extents);
-	double x = w/2.0-(extents.width/2 + extents.x_bearing);
-	double y = h/2.0-(extents.height/2 + extents.y_bearing);
+	x = w/2.0-(extents.width/2 + extents.x_bearing);
+	y = h/2.0-(extents.height/2 + extents.y_bearing);
+	clockheight = extents.height;
 	cairo_move_to(cr, x, y);
 	cairo_text_path(cr, dt);
 	cairo_fill_preserve(cr);
 	cairo_set_source_rgba(cr, 0.03, 0.03, 0.03, 1.0);
 	cairo_set_line_width(cr, 2.5);
 	cairo_stroke(cr);
+
+	if(capslock) {
+		cairo_set_source_rgba(cr, 0.82, 0.08, 0.45, 1.0);
+		cairo_set_font_size(cr, 40.0);
+		cairo_text_extents(cr, cl, &extents);
+		x = w/2.0 -  (extents.width/2 + extents.x_bearing);
+		y += clockheight/2 + 20;
+		cairo_move_to(cr, x, y);
+		cairo_text_path(cr, cl);
+		cairo_fill_preserve(cr);
+		cairo_set_source_rgba(cr, 0.03, 0.03, 0.03, 1.0);
+		cairo_set_line_width(cr, 2.5);
+		cairo_stroke(cr);
+	}
 
 	return pm;
 }
@@ -216,6 +234,7 @@ readpw(Display *dpy, const char *pws)
 	XEvent ev;
 	struct timespec tim, tim2;
 	tim.tv_sec = 0;
+        Bool capslock = False;
 
 	len = llen = 0;
 	running = True;
@@ -238,6 +257,7 @@ readpw(Display *dpy, const char *pws)
 					|| IsMiscFunctionKey(ksym) || IsPFKey(ksym)
 					|| IsPrivateKeypadKey(ksym))
 				continue;
+			capslock = (ev.xkey.state & LockMask);
 			switch(ksym) {
 			case XK_Return:
 				passwd[len] = 0;
@@ -268,9 +288,9 @@ readpw(Display *dpy, const char *pws)
 				}
 				break;
 			}
-			if(llen == 0 && len != 0) {
+			if (len > 0) {
 				for(screen = 0; screen < nscreens; screen++) {
-					XSetWindowBackgroundPixmap(dpy, locks[screen]->win, doodle(dpy, 1920, 1080));
+					XSetWindowBackgroundPixmap(dpy, locks[screen]->win, doodle(dpy, 1920, 1080, capslock));
 					XClearWindow(dpy, locks[screen]->win);
 				}
 			} else if(llen != 0 && len == 0) {
