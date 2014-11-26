@@ -17,6 +17,9 @@
 #include <X11/keysym.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include <cairo/cairo-xlib.h>
+#include <cairo/cairo.h>
+#include <time.h>
 
 #if HAVE_BSD_AUTH
 #include <login_cap.h>
@@ -58,6 +61,112 @@ dontkillme(void) {
 		die("cannot disable the out-of-memory killer for this process\n");
 }
 #endif
+
+static double rad(double deg) {
+	return deg * (3.141592653589 / 180);
+}
+
+static double memory(void) {
+	FILE *fp;
+	char buf[32];
+	char *label;
+	char *value;
+	double total;
+	double active;
+
+	fp = fopen("/proc/meminfo", "r");
+	for(int i = 0; i < 7; i++) {
+		fgets(buf, 32, fp);
+		label = strtok(buf, ":");
+		value = strtok(NULL, ":");
+		if (strcmp(label, "MemTotal") == 0) {
+			total = strtod(value, NULL);
+		}
+		else if (strcmp(label, "Active") == 0) {
+			active = strtod(value, NULL);
+		}
+	}
+	return active/total*100.0;
+}
+
+static double battery(void) {
+	FILE *fp;
+	char buf[10];
+	double now;
+	double full;
+
+	fp = fopen("/sys/class/power_supply/BAT1/charge_now", "r");
+	fgets(buf, 16, fp);
+	now = strtod(buf, NULL);
+	fclose(fp);
+
+	fp = fopen("/sys/class/power_supply/BAT1/charge_full", "r");
+	fgets(buf, 16, fp);
+	full = strtod(buf, NULL);
+	fclose(fp);
+
+	return now/full*100.0;
+}
+
+static Pixmap doodle(Display *dpy, int w, int h) {
+	Pixmap pm = XCreatePixmap(dpy, DefaultRootWindow(dpy), w, h,
+					DefaultDepth(dpy, DefaultScreen(dpy)));
+	cairo_surface_t *surface = cairo_xlib_surface_create(
+		dpy, pm, DefaultVisual(dpy, DefaultScreen(dpy)),
+		w, h);
+	cairo_t *cr = cairo_create(surface);
+	cairo_text_extents_t extents;
+	double lw = 8.0;
+
+	double mem_percent = memory();
+	double bat_percent = battery();
+	time_t epoch = time(NULL);
+	char dt[10];
+	strftime(dt, 10, "%H:%M", localtime(&epoch));
+
+	cairo_set_source_rgba(cr, 0.13, 0.13, 0.13, 1.0);
+	cairo_rectangle(cr, 0, 0, w, h);
+	cairo_fill(cr);
+
+	/*
+	 * Troughs for the wheel thingies
+	 * Nah. Turn those off here, unless we're sticking an image underneath.
+	cairo_set_source_rgba(cr, 0, 0, 0, 0.5);
+	cairo_set_line_width(cr, lw);
+	cairo_arc(cr, w/2.0, h/2.0, 200, 0, 6.283);
+	cairo_stroke(cr);
+
+	cairo_arc(cr, w/2.0, h/2.0, 188, 0, 6.283);
+	cairo_stroke(cr);
+	*/
+	/* cairo_arc(cr, w/2.0, h/2.0, 176, 0, 6.283); */
+	/* cairo_stroke(cr); */
+
+	/* Actual percentage bits */
+	cairo_set_source_rgba(cr, 0.08, 0.45, 0.82, 0.8);
+	cairo_set_line_width(cr, lw - 1.0);
+	cairo_arc(cr, w/2.0, h/2.0, 200, rad(90), rad(90 + mem_percent*360/100));
+	cairo_stroke(cr);
+
+	cairo_set_source_rgba(cr, 0.45, 0.82, 0.08, 0.8);
+	cairo_arc(cr, w/2.0, h/2.0, 188, rad(90), rad(90 + bat_percent*360/100));
+	cairo_stroke(cr);
+
+	cairo_set_source_rgba(cr, 0.82, 0.08, 0.45, 1.0);
+	cairo_select_font_face(cr, "Quadranta", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
+	cairo_set_font_size(cr, 70.0);
+	cairo_text_extents (cr, dt, &extents);
+	double x = w/2.0-(extents.width/2 + extents.x_bearing);
+	double y = h/2.0-(extents.height/2 + extents.y_bearing);
+	cairo_move_to(cr, x, y);
+	cairo_text_path(cr, dt);
+	cairo_fill_preserve(cr);
+	cairo_set_source_rgba(cr, 0.03, 0.03, 0.03, 1.0);
+	cairo_set_line_width(cr, 2.5);
+	cairo_stroke(cr);
+
+	return pm;
+}
 
 #ifndef HAVE_BSD_AUTH
 static const char *
@@ -155,7 +264,7 @@ readpw(Display *dpy, const char *pws)
 			}
 			if(llen == 0 && len != 0) {
 				for(screen = 0; screen < nscreens; screen++) {
-					XSetWindowBackground(dpy, locks[screen]->win, locks[screen]->colors[1]);
+					XSetWindowBackgroundPixmap(dpy, locks[screen]->win, doodle(dpy, 1920, 1080));
 					XClearWindow(dpy, locks[screen]->win);
 				}
 			} else if(llen != 0 && len == 0) {
