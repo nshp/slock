@@ -153,7 +153,7 @@ static Pixmap doodle(Display *dpy, int w, int h) {
 	cairo_stroke(cr);
 
 	cairo_set_source_rgba(cr, 0.82, 0.08, 0.45, 1.0);
-	cairo_select_font_face(cr, "Quadranta", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
+	cairo_select_font_face(cr, FONT, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
 	cairo_set_font_size(cr, 70.0);
 	cairo_text_extents (cr, dt, &extents);
 	double x = w/2.0-(extents.width/2 + extents.x_bearing);
