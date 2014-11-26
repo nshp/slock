@@ -214,6 +214,8 @@ readpw(Display *dpy, const char *pws)
 	unsigned int len, llen;
 	KeySym ksym;
 	XEvent ev;
+	struct timespec tim, tim2;
+	tim.tv_sec = 0;
 
 	len = llen = 0;
 	running = True;
@@ -239,6 +241,10 @@ readpw(Display *dpy, const char *pws)
 			switch(ksym) {
 			case XK_Return:
 				passwd[len] = 0;
+				/* Delay by a random # of ms to thwart brute-force */
+				tim.tv_nsec = 400000000L + (rand() % 50000000L);
+				printf("Sleeping for %ld nsec\n", tim.tv_nsec);
+				nanosleep(&tim, &tim2);
 #ifdef HAVE_BSD_AUTH
 				running = !auth_userokay(getlogin(), NULL, "auth-xlock", passwd);
 #else
@@ -366,6 +372,8 @@ main(int argc, char **argv) {
 #endif
 	Display *dpy;
 	int screen;
+
+	srand(time(NULL));
 
 	if((argc == 2) && !strcmp("-v", argv[1]))
 		die("slock-%s, © 2006-2012 Anselm R Garbe\n", VERSION);
