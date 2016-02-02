@@ -75,6 +75,10 @@ static double memory(void) {
 	double active;
 
 	fp = fopen("/proc/meminfo", "r");
+	if (!fp) {
+		perror("/proc/meminfo");
+		return 0;
+	}
 	for(int i = 0; i < 7; i++) {
 		fgets(buf, 32, fp);
 		label = strtok(buf, ":");
@@ -86,6 +90,7 @@ static double memory(void) {
 			active = strtod(value, NULL);
 		}
 	}
+	fclose(fp);
 	return active/total*100.0;
 }
 
