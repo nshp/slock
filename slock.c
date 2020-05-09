@@ -1,6 +1,6 @@
 
 /* See LICENSE file for license details. */
-#define _XOPEN_SOURCE 500
+#define _DEFAULT_SOURCE
 #if HAVE_SHADOW_H
 #include <shadow.h>
 #endif
@@ -11,8 +11,8 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
 #include <unistd.h>
+#include <string.h>
 #include <sys/types.h>
 #include <X11/keysym.h>
 #include <X11/Xlib.h>
@@ -74,13 +74,18 @@ static double memory(void) {
 	double total;
 	double active;
 
+	active = 0.0;
+	total = 1.0;
 	fp = fopen("/proc/meminfo", "r");
 	if (!fp) {
 		perror("/proc/meminfo");
-		return 0;
+		return 0.0;
 	}
 	for(int i = 0; i < 7; i++) {
-		fgets(buf, 32, fp);
+		if (NULL == fgets(buf, sizeof (buf), fp)) {
+			fprintf(stderr, "fgets fail\n");
+			return 0.0;
+		}
 		label = strtok(buf, ":");
 		value = strtok(NULL, ":");
 		if (strcmp(label, "MemTotal") == 0) {
@@ -96,17 +101,31 @@ static double memory(void) {
 
 static double battery(void) {
 	FILE *fp;
-	char buf[10];
+	char buf[16];
 	double now;
 	double full;
 
-	fp = fopen("/sys/class/power_supply/BAT1/charge_now", "r");
-	fgets(buf, 16, fp);
+	fp = fopen("/sys/class/power_supply/BAT0/charge_now", "r");
+	if (NULL == fp) {
+		perror("fopen charge_now");
+		return 0.0;
+	}
+	if (NULL == fgets(buf, sizeof (buf), fp)) {
+		fprintf(stderr, "fgets fail\n");
+		return 0.0;
+	}
 	now = strtod(buf, NULL);
 	fclose(fp);
 
-	fp = fopen("/sys/class/power_supply/BAT1/charge_full", "r");
-	fgets(buf, 16, fp);
+	fp = fopen("/sys/class/power_supply/BAT0/charge_full", "r");
+	if (NULL == fp) {
+		perror("fopen charge_full");
+		return 0.0;
+	}
+	if (NULL == fgets(buf, sizeof (buf), fp)) {
+		fprintf(stderr, "fgets fail\n");
+		return 0.0;
+	}
 	full = strtod(buf, NULL);
 	fclose(fp);
 
